@@ -1,48 +1,60 @@
 import pytest
 import functools
+from stuff import *
+import traceback
 
-def make_scheduler_decorator(cls):
+def ensure_test_of_available_schedulers_for(cls):
     def actual_decorator(func):
         possible_schedulers = cls.available_schedulers
 
         @functools.wraps(func)
-        def wrapper(all_possible_schedulers, *args, **kwargs):
-            scheduler = all_possible_schedulers.get('scheduler')
-            n_workers = all_possible_schedulers.get('n_workers')
-            if scheduler in possible_schedulers:
-                func(*args, **kwargs, **all_possible_schedulers)
+        def wrapper(*args, **kwargs):
+            scheduler_dict = kwargs.pop('scheduler')
+            scheduler = scheduler_dict.get('scheduler')
+            if scheduler in possible_schedulers or scheduler is None:
+                func(*args, **kwargs, scheduler=scheduler)
+            else: # scheduler not in possible_schedulers
+                try:
+                    func(*args, **kwargs, scheduler=scheduler)
+                except ValueError as e:
+                    last_method_name =  traceback.extract_tb(e.__traceback__)[-1].name
+                    if last_method_name != '_configure':
+                        raise e
+                    else:
+                        pass
         return wrapper
 
     return actual_decorator
 
 #------------------------------------------------
 
-do_scheduler_testing = make_scheduler_decorator(Base)
 
-@pytest.parametrize('rv', list(range(3)))
-@pytest.fixture
-def someargs(rv):
-    return rv
+@pytest.fixture(params=[[1,2,3], ['a', True, None]])
+def someargs(request):
+    return request.param
 
-@pytest.parametrize('rv', {str(i):i for i in range(3)})
-@pytest.fixture
-def someargs(rv):
-    return rv
-
-@do_scheduler_testing
-def test_some_things(someargs, somekwargs):
-    obj = Base(args=someargs, kwargs=somekwargs)
-    obj.run()
+@pytest.fixture(params=[{'1':2, '3':4}, {'a':2}])
+def somekwargs(request):
+    return request.param
 
 
-@pytest.mark.parametrize("args", list(range(3)))
-@pytest.mark.parametrize("kwargs", dict(enumerate(range(3))))
-def test_Good(args, kwargs, possible_schedulers):
-    obj = Good(args=args, kwargs=kwargs)
+@ensure_test_of_available_schedulers_for(Good)
+def test_Good(someargs, somekwargs, scheduler):
+    obj = Good(args=someargs, kwargs=somekwargs)
+    obj.run(scheduler=scheduler)
 
-    for scheduler in possible_schedulers:
-        if scheduler is None or method in Good.available_methods:
-            obj.run(scheduler=scheduler)
-        else:
-            with pytest.raises(ValueError):
-                obj.run(scheduler=scheduler)
+@ensure_test_of_available_schedulers_for(Better)
+def test_Better(someargs, somekwargs, scheduler):
+    obj = Better(args=someargs, kwargs=somekwargs)
+    obj.run(scheduler=scheduler)
+
+@ensure_test_of_available_schedulers_for(Best)
+def test_Best(someargs, somekwargs, scheduler):
+    obj = Best(args=someargs, kwargs=somekwargs)
+    obj.run(scheduler=scheduler)
+
+@ensure_test_of_available_schedulers_for(failing)
+def test_failing(someargs, somekwargs, scheduler):
+    obj = failing(args=someargs, kwargs=somekwargs)
+    obj.run(scheduler=scheduler)
+
