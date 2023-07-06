@@ -38,9 +38,3 @@ class Best(Base):
 
 class failing(Base):
     available_schedulers = ['multiprocessing', 'dask']
-
-
-@pytest.fixture
-def all_possible_schedulers():
-    return ['multiprocessing', 'dask', 'slurm', None]
-
