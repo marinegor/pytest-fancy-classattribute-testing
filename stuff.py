@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import pytest
 
 class Base:
     def __init__(self, *args, **kwargs):
@@ -10,31 +9,40 @@ class Base:
     @classmethod
     @property
     def available_schedulers(self):
-        raise NotImplementedError('`available_schedulers` must be explicitly implemented in subclasses')
+        return "local"
 
     def _configure(self, scheduler: str = None):
-        if scheduler in self.available_schedulers or scheduler is None:
-            print(f'Configuring {scheduler=}')
+        scheduler = scheduler if scheduler is not None else 'local'
+        if scheduler in self.available_schedulers:
+            print(f"Configuring {scheduler=}")
         else:
-            raise ValueError(f'scheduler {scheduler} not in {self.available_schedulers}')
+            raise ValueError(
+                f"scheduler {scheduler} not in {self.available_schedulers}"
+            )
 
     def _compute(self, scheduler: str):
-        print(f'Computing with {scheduler}')
+        if scheduler != 'local':
+            __import__(scheduler)
+        print(f"Computing with {scheduler}")
         if not self.__class__.__name__[0].isupper():
-            raise ValueError('Class name should be capital')
+            raise ValueError("Class name should be capital")
 
     def run(self, scheduler: str = None):
         self._configure(scheduler)
         self._compute(scheduler)
 
+
 class Good(Base):
-    available_schedulers = ['multiprocessing']
+    available_schedulers = ("local", "multiprocessing")
+
 
 class Better(Base):
-    available_schedulers = ['dask']
+    available_schedulers = ("local", "dask")
+
 
 class Best(Base):
-    available_schedulers = ['multiprocessing', 'dask']
+    available_schedulers = ("local", "multiprocessing", "dask")
+
 
 class failing(Base):
-    available_schedulers = ['multiprocessing', 'dask']
+    available_schedulers = ("local", "multiprocessing", "dask")
