@@ -6,6 +6,8 @@ import importlib
 
 def is_installed(modulename):
     """Check if modulename is present"""
+    if modulename == "local":
+        return True
     try:
         importlib.import_module(modulename)
         return True
@@ -19,30 +21,19 @@ def get_tested_schedulers_for(cls):
 
     return [
         pytest.param(
-            (s, nproc),
+            {"scheduler": s, "n_workers": nproc},
             marks=pytest.mark.skipif(
                 not is_installed(s), reason=f"{s} is not installed"
             ),
         )
         for s in possible_schedulers
-        for nproc in range(2)
+        for nproc in range(1, 3)
     ]
 
 
 def ensure_test_of_available_schedulers_for(cls):
-    def actual_decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            scheduler_dict = kwargs.pop("scheduler")
-            scheduler = scheduler_dict.get("scheduler")
-            func(*args, **kwargs, scheduler=scheduler)
-
-        return wrapper
-
     tested_schedulers = get_tested_schedulers_for(cls)
-    actual_decorator = pytest.mark.parametrize("scheduler", tested_schedulers)
-
-    return actual_decorator
+    return pytest.mark.parametrize("scheduler_params", tested_schedulers)
 
 
 # ------------------------------------------------
@@ -59,25 +50,25 @@ def somekwargs(request):
 
 
 @ensure_test_of_available_schedulers_for(Good)
-def test_Good(someargs, somekwargs, scheduler):
+def test_Good(someargs, somekwargs, scheduler_params):
     obj = Good(args=someargs, kwargs=somekwargs)
-    obj.run(scheduler=scheduler)
+    obj.run(**scheduler_params)
 
 
 @ensure_test_of_available_schedulers_for(Better)
-def test_Better(someargs, somekwargs, scheduler):
+def test_Better(someargs, somekwargs, scheduler_params):
     obj = Better(args=someargs, kwargs=somekwargs)
-    obj.run(scheduler=scheduler)
+    obj.run(**scheduler_params)
 
 
 @ensure_test_of_available_schedulers_for(Best)
-def test_Best(someargs, somekwargs, scheduler):
+def test_Best(someargs, somekwargs, scheduler_params):
     obj = Best(args=someargs, kwargs=somekwargs)
-    obj.run(scheduler=scheduler)
+    obj.run(**scheduler_params)
 
 
 @ensure_test_of_available_schedulers_for(failing)
-def test_failing(someargs, somekwargs, scheduler):
+def test_failing(someargs, somekwargs, scheduler_params):
     with pytest.raises(ValueError):
         obj = failing(args=someargs, kwargs=somekwargs)
-        obj.run(scheduler=scheduler)
+        obj.run(**scheduler_params)
