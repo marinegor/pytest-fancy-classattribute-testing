@@ -1,59 +1,70 @@
-#!/usr/bin/env python3
+from typing import Iterable, Callable
+import numpy as np
+from itertools import chain
 
 
 class Base:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
+        self._trajectory = len(chain(args, kwargs))
 
     @classmethod
     @property
     def available_schedulers(self):
         return "local"
 
-    def _configure(self, scheduler: str, n_workers: int):
-        if scheduler in self.available_schedulers:
-            print(f"Configuring {scheduler=} with {n_workers=}")
-            return {"scheduler": scheduler, "n_workers": n_workers}
-        else:
-            raise ValueError(
-                f"scheduler {scheduler} not in {self.available_schedulers}"
-            )
+    def _setup_frames(
+        self, start: int, stop: int, step: int, frames: Iterable
+    ) -> np.ndarray:
+        self.start = start
+        self.stop = stop
+        self.step = step
+        self.n_frames = len(self._trajectory)
+        self.frames = np.zeros(self.n_frames, dtype=int)
+        self.times = np.zeros(self.n_frames)
 
-    def _compute(self, scheduler: str, n_workers: int):
-        if scheduler != "local":
-            __import__(scheduler)
+    def _single_frame(self):
+        pass
 
-        if not self.__class__.__name__[0].isupper():
-            raise ValueError("Class name should be capital")
-        if n_workers < 1:
-            raise ValueError("Should have >0 workers")
+    def _get_computation_groups(
+        self, frames: Iterable, n_parts: int
+    ) -> list[np.ndarray, np.ndarray]:
+        """Takes `frames`, splits them evenly
+        and returns as list of
+        (frame_indices, frames) numpy ndarrays"""
+        indices = np.arange(len(frames))
+        return np.array_split(np.vstack(indices, frames).T, n_parts)
 
-        print(f"Computing with {scheduler=} and {n_workers=}")
-        for _ in range(int(1e7)):
-            pass
-        return 42
+    def _prepare(self):
+        pass
 
-    def run(self, scheduler: str = None, n_workers: int = None):
-        scheduler = scheduler if scheduler is not None else "local"
-        n_workers = n_workers if n_workers is not None else 1
+    def _compute(self, computation_group):
+        pass
 
-        scheduler_dict = self._configure(scheduler=scheduler, n_workers=n_workers)
-        results = self._compute(**scheduler_dict)
+    def run(
+        self,
+        start: int = None,
+        stop: int = None,
+        step: int = None,
+        frames: Iterable = None,
+        backend: str = None,
+        client: object = None,
+        n_workers: int = 1,
+        n_parts: int = None,
+    ):
+        n_parts = n_workers if n_parts is None else n_parts
+        selected_frames = self._setup_frames(start, stop, step, frames)
+        computation_groups = self._get_computation_groups(selected_frames, n_parts)
+        tasks = self._create_tasks(computation_groups)
+
+        client = (
+            client
+            if client is not None
+            else self._configure_client(backend=backend, n_workers=n_workers)
+        )
+
+        remote_results = client.compute(tasks)
+        flat_results = self._parallel_conclude(self, remote_results)
+        results = self._conclude(flat_results)
         return results
-
-
-class Good(Base):
-    available_schedulers = ("local", "multiprocessing")
-
-
-class Better(Base):
-    available_schedulers = ("local", "dask")
-
-
-class Best(Base):
-    available_schedulers = ("local", "multiprocessing", "dask")
-
-
-class failing(Base):
-    available_schedulers = ("local", "multiprocessing", "dask")
